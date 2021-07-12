@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net5.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\JogoGourmet.Application\JogoGourmet.Application.csproj" />
+    <ProjectReference Include="..\JogoGourmet.Core\JogoGourmet.Core.csproj" />
+    <ProjectReference Include="..\JogoGourmet.Data\JogoGourmet.Data.csproj" />
+    <ProjectReference Include="..\JogoGourmet.Domain\JogoGourmet.Domain.csproj" />
+  </ItemGroup>
+
+</Project>
