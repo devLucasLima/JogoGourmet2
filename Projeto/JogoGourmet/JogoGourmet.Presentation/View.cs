@@ -29,39 +29,20 @@ namespace JogoGourmet.Presentation
         {
             /*definindo parametros iniciais*/
             var caracteristicaInicial = new PratoDto() { Nome = "Lasanha", Caracteristica = "massa" };
-
             await _pratoAppService.Adicionar(caracteristicaInicial);
 
             var pratoSemCaracteristicaInicial = new PratoDto() { Nome = "Bolo de chocolate", Caracteristica = null };
-
             await _pratoAppService.Adicionar(pratoSemCaracteristicaInicial);
-
-            var pratoComCaracteristicaInicial = new PratoDto() { Nome = "Lasanha", Caracteristica = null };
-
-            await _pratoAppService.Adicionar(pratoComCaracteristicaInicial);
 
             /*criando arvore*/
             arvorePratos = new ArvorePratoDto();
-
             arvorePratos.SetPrato(caracteristicaInicial);
 
-
             var nodeSemCaracteristica = new ArvorePratoDto();
-
             nodeSemCaracteristica.SetPrato(pratoSemCaracteristicaInicial);
-
             await _arvorePratoAppService.Adicionar(nodeSemCaracteristica);
 
-            var nodeComCaracteristica = new ArvorePratoDto();
-
-            nodeComCaracteristica.SetPrato(pratoComCaracteristicaInicial);
-
-            await _arvorePratoAppService.Adicionar(nodeComCaracteristica);
-
-
             arvorePratos.SetNodeSemCaracteristica(nodeSemCaracteristica);
-            arvorePratos.SetNodeComCaracteristica(nodeComCaracteristica);
-
             await _arvorePratoAppService.Adicionar(arvorePratos);
         }
 
@@ -79,41 +60,41 @@ namespace JogoGourmet.Presentation
 
             DialogResult resposta;
 
-            /*percorro a arvore de pratos perguntando sobre suas caracteristicas*/
-            while(node.NodeSemCaracteristicaId != null || node.NodeComCaracteristicaId != null)
+            bool comCaracteristica = false;
+
+            node.Prato = await _pratoAppService.ObterPorId(node.PratoId);
+
+            if (node.Prato.Caracteristica != null || node.NodeSemCaracteristicaId != null || node.NodeComCaracteristicaId != null)
             {
-                node.Prato = await _pratoAppService.ObterPorId(node.PratoId);
                 resposta = AdivinharCaracteristica(node.Prato);
+                comCaracteristica = (resposta == DialogResult.Yes);
 
                 if (resposta == DialogResult.No && node.NodeSemCaracteristicaId != null)
                 {
                     nodePai = node;
                     node = await _arvorePratoAppService.ObterPorId((Guid)node.NodeSemCaracteristicaId);
-                    node.Prato = await _pratoAppService.ObterPorId(node.PratoId);
                     return await AdivinharPratos(nodePai, node, finalizou);
                 }
                 else if (resposta == DialogResult.Yes && node.NodeComCaracteristicaId != null)
                 {
                     nodePai = node;
                     node = await _arvorePratoAppService.ObterPorId((Guid)node.NodeComCaracteristicaId);
-                    node.Prato = await _pratoAppService.ObterPorId(node.PratoId);
                     return await AdivinharPratos(nodePai, node, finalizou);
                 }
-                else
-                    break;
             }
+  
+            /*se não for ultimo prato(bolo de chocolate) e nao tiver a caracteristca, pergunto em relação ao prato anterior*/
+            resposta =  AdivinharPrato((node.Prato.Caracteristica != null && !comCaracteristica) ? nodePai.Prato : node.Prato);
 
-            node.Prato = await _pratoAppService.ObterPorId(node.PratoId);
-            resposta =  AdivinharPrato(node.Prato);
-
-            /* se adivinhou o prato*/
             if (resposta == DialogResult.Yes)
             {
                 MessageBox.Show("Acertei de novo!", "", MessageBoxButtons.OK);
             }
             else
             {
-                AdicionarNovoPrato(nodePai, node);
+                var novoPrato = await RebecerNovoPrato(node.Prato);
+                /*se for ultimo prato(bolo de chocolate) adicionar node anterior*/
+                AdicionarNovoPrato(node.Prato.Caracteristica == null ? nodePai : node, novoPrato, comCaracteristica);
             }
 
             return true;
@@ -129,46 +110,53 @@ namespace JogoGourmet.Presentation
             return MessageBox.Show("O Prato que você pensou é " + prato.Nome + "?", "", MessageBoxButtons.YesNo);
         }
 
-        private async void AdicionarNovoPrato(ArvorePratoDto nodePai, ArvorePratoDto node)
+        private void AdicionarNovoPrato(ArvorePratoDto node, PratoDto prato, bool adicionarComCaracteristica)
+        {
+            if (adicionarComCaracteristica)
+                AdicionarPratoComCaracteristica(node, prato);
+            else
+                AdicionarPratoSemCaracteristica(node, prato);
+        }
+
+        private async Task<PratoDto> RebecerNovoPrato(PratoDto prato)
         {
             var nomePrato = Microsoft.VisualBasic.Interaction.InputBox("Qual prato você pensou?", "Desisto", string.Empty);
+            var caracteristicaPrato = Microsoft.VisualBasic.Interaction.InputBox(nomePrato + " é _____ mas " + (prato.Nome) + " não.", "Complete", string.Empty);
 
-            var caracteristicaPrato = Microsoft.VisualBasic.Interaction.InputBox(nomePrato + " é _____ mas " + (node.Prato.Nome) + " não.", "Complete", string.Empty);
-
-            if (nomePrato.Trim() == string.Empty || nomePrato.Trim() == string.Empty)
-                MessageBox.Show("Não consegui identificar o novo prato, que pena!", "", MessageBoxButtons.OK);
-            else
+            var novoPrato = new PratoDto()
             {
-                /*crio novo prato*/
-                var novoPrato = new PratoDto()
-                {
-                    Nome = nomePrato,
-                    Caracteristica = caracteristicaPrato
-                };
+                Nome = nomePrato,
+                Caracteristica = caracteristicaPrato
+            };
+            await _pratoAppService.Adicionar(novoPrato);
 
-                await _pratoAppService.Adicionar(novoPrato);
+            return novoPrato;
+        }
 
-                /*crio novo node*/
-                var novoNode = new ArvorePratoDto(){
-                        PratoId = novoPrato.Id,
-                        NodeSemCaracteristicaId = node.Id,
-                        NodeComCaracteristicaId = null
-                };
-                
-                await _arvorePratoAppService.Adicionar(novoNode);
+        private async void AdicionarPratoComCaracteristica(ArvorePratoDto node, PratoDto prato)
+        {
+            var novoNode = new ArvorePratoDto()
+            {
+                NodeComCaracteristicaId = node.NodeComCaracteristicaId
+            };
+            novoNode.SetPrato(prato);
+            await _arvorePratoAppService.Adicionar(novoNode);
 
-                /*Aponto o node pai pro novo node*/
-                if (nodePai.NodeSemCaracteristicaId == node.Id)
-                {
-                    nodePai.NodeSemCaracteristicaId = novoNode.Id;
-                }
-                else
-                {
-                    nodePai.NodeComCaracteristicaId = novoNode.Id;
-                }
+            node.NodeComCaracteristicaId = novoNode.Id;
+            await _arvorePratoAppService.Alterar(node);
+        }
 
-                await _arvorePratoAppService.Alterar(nodePai);
-            }
+        private async void AdicionarPratoSemCaracteristica(ArvorePratoDto node, PratoDto prato)
+        {
+            var novoNode = new ArvorePratoDto()
+            {
+                NodeSemCaracteristicaId = node.NodeSemCaracteristicaId
+            };
+            novoNode.SetPrato(prato);
+            await _arvorePratoAppService.Adicionar(novoNode);
+
+            node.NodeSemCaracteristicaId = novoNode.Id;
+            await _arvorePratoAppService.Alterar(node);
         }
     }
 }
